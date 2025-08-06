@@ -1,5 +1,8 @@
 import orderModel from "../models/orderModel.js"
+import questionModel from "../models/Question.js";
 import userModel from "../models/userModel.js"
+
+
 
 
 import Stripe from "stripe";
@@ -228,4 +231,122 @@ const updateStatus = async (req, res) => {
 }
 
 
-export { verifyRazorpay, verifyStripe, placeOrder, placeOrderRazorpay, placeOrderStripe, allOrders, updateStatus, userOrders }
+
+const questionAboutaProduct = async (req, res) => {
+
+    try {
+        const { name, description, sizes, quantity, questionText } = req.body;
+        const { userId } = req.body;
+
+        if (!name || !description || !sizes || !quantity || !questionText) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+
+        if (!Array.isArray(sizes)) {
+            return res.status(400).json({ message: 'Product sizes must be an array.' });
+        }
+
+        if (quantity <= 0) {
+            return res.status(400).json({ message: 'The quantity must be a positive number.' });
+        }
+
+
+        const newQuestion = new questionModel({
+            user: userId,
+            name,
+            description,
+            sizes,
+            quantity,
+            questionText,
+            isRead: false
+        });
+
+        await newQuestion.save();
+
+        res.status(201).json({
+            status: true,
+            message: 'The question was submitted successfully.',
+            question: {
+                _id: newQuestion._id,
+                name: newQuestion.name,
+                description: newQuestion.description,
+                sizes: newQuestion.sizes,
+                quantity: newQuestion.quantity,
+                questionText: newQuestion.questionText,
+                createdAt: newQuestion.createdAt
+            }
+        });
+    } catch (error) {
+
+        res.status(500).json({ status: false, message: 'An error occurred while submitting the question.' });
+    }
+}
+
+
+const viewListOfQuestions = async (req, res) => {
+    try {
+
+        const questions = await questionModel.find()
+            .populate('user', 'email')
+            .sort({ createdAt: -1 })
+            .select('-__v');
+        console.log(questions);
+        res.status(200).json({
+            status: true,
+            questions: questions.map(q => ({
+                _id: q._id,
+                user: q.user,
+                name: q.name,
+                description: q.description,
+                sizes: q.sizes,
+                quantity: q.quantity,
+                questionText: q.questionText,
+                isRead: q.isRead,
+                readAt: q.readAt,
+                createdAt: q.createdAt
+            }))
+        });
+    } catch (error) {
+        console.error('Error displaying questions');
+        res.status(500).json({ status: false, message: 'Error displaying questions' });
+    }
+}
+
+
+
+const markTheQuestionAsRead = async (req, res) => {
+    try {
+
+        const { questionId } = req.body;
+
+        if (!questionId) {
+            return res.status(400).json({ message: 'Question ID required' });
+        }
+
+
+        const updatedQuestion = await questionModel.findByIdAndUpdate(
+            questionId,
+            { isRead: true, readAt: new Date() },
+            { new: true }
+        );
+
+        if (!updatedQuestion) {
+            return res.status(404).json({ message: 'The question does not exist' });
+        }
+
+        res.status(200).json({ message: 'The question has been marked as read.', question: updatedQuestion });
+    } catch (error) {
+
+        res.status(500).json({ message: 'An error occurred while updating the question status.' });
+    }
+}
+
+
+
+
+
+
+
+
+export { markTheQuestionAsRead, viewListOfQuestions, questionAboutaProduct, verifyRazorpay, verifyStripe, placeOrder, placeOrderRazorpay, placeOrderStripe, allOrders, updateStatus, userOrders }
